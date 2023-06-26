@@ -1,0 +1,353 @@
+---
+output:
+  html_document: default
+  pdf_document: default
+  word_document: default
+editor_options: 
+  chunk_output_type: console
+---
+### Data Description and Understanding
+```{r, include=FALSE}
+library(ggplot2)
+library(dplyr)
+library(naijR)
+library(skimr)
+library(gmodels)
+project_data<- read.csv("C:/Users/User/Desktop/final project/encoded further surv 13 vars.csv")
+head(project_data)
+```
+```{r, include=FALSE}
+## lemme try as.factor
+project_data$status <- as.factor(project_data$status)
+project_data$gender <- as.factor(project_data$gender)
+project_data$TOSecSch <- as.factor(project_data$TOSecSch)
+project_data$livingINsch <- as.factor(project_data$livingINsch)
+project_data$familystructure <- as.factor(project_data$familystructure)
+project_data$Deptatsecsch <- as.factor(project_data$Deptatsecsch)
+project_data$base <- as.factor(project_data$base)
+project_data$sponsor <- as.factor(project_data$sponsor)
+project_data$zone <- as.factor(project_data$zone)
+project_data$Fathersedu <- as.factor(project_data$Fathersedu)
+project_data$Mothersedu <- as.factor(project_data$Mothersedu)
+project_data$Educationisthebestlegacy <- as.factor(project_data$Educationisthebestlegacy)
+project_data$Schoolisscam <- as.factor(project_data$Schoolisscam)
+project_data$opinion<- as.factor(project_data$opinion)
+project_data$olevel <- as.factor(project_data$olevel)
+
+```
+```{r, echo=FALSE}
+skim(project_data)
+```
+summary of the categorical variables coming through later  
+
+summary of the survivval time, that is time till admission of which 50% is the median survival time   
+```{r,echoo = FALSE}
+quantile(project_data$survivaltime)
+```
+### The Contingency Tables  
+
+
+# Data Presentation and Analysis  
+## Non-Parametric Analysis  
+```{r, include=FALSE}
+library(survival)
+library(survminer)
+library(survMisc)
+library(dplyr)
+library(writexl)
+#presenting the data from excel 
+project_data<- read.csv("C:/Users/User/Desktop/final project/encoded further surv 13 vars.csv")
+#attach so you dont have to stress through $ no more
+attach(project_data)
+
+```
+The **covariates** was reduced from 13 to 6 based on relative importance  
+The **covariates** selected are:  
+1.  gender  
+2.  zone  
+3.  tosecsch  
+4.  opinion  
+5.  livinginsch  
+6.  olevelattempts  
+
+```{r, include= FALSE}
+##define the variables
+time<- project_data$survivaltime
+status <- project_data$status
+covariates<- cbind(gender,TOSecSch,livingINsch, zone, opinion, olevel)
+
+```
+###distribution of responsesacross zones in Nigeria
+```{r,echo=FALSE,warning=FALSE}
+
+#create a list of all states by their respective gpz
+gpz<-c("ne","nc","nw","ss","se","sw")
+
+statelist<- 
+  lapply(gpz,function(x){
+    data.frame(State = states(gpz = x), GPZ = toupper(x))
+  })
+gpz_df<- Reduce(rbind, statelist)
+gpz_df<- rbind(gpz_df, c("Federal Capital Territory","FCT"))
+map_ng(data = gpz_df,x = GPZ, 
+       title = "regional distribution of responses",col = "YlOrBr",
+       leg.title = "legend")
+
+```
+
+
+NC   | 82    
+-----|-------
+NE   | 3     
+-----|-------
+NW   | 7     
+-----|-------
+SE   | 11    
+-----|-------
+SS   | 12    
+-----|-------
+SW   | 92    
+-----|-------
+
+## kaplan meier non-parametric analysis  
+### Overall kaplan-meier estimate and chart 
+```{r, echo = FALSE, warning=FALSE}
+kmsurv<- survfit(Surv(time, status) ~ 1, data = project_data)
+summary(kmsurv)
+surv_median(kmsurv)
+##****isnt this the table they call life table in S.A
+ggsurvplot(kmsurv, fun = "pct", color = "black",
+           surv.median.line ="hv",
+           conf.int = TRUE,
+           conf.int.fill = 'red',
+           title ='kaplan-meier survivor curve for the
+     "time till first tertiary admission" dataset', xlim = c(0,30),
+           font.title = c(16, "bold", "black")
+           )
+
+```
+
+## Non-Parametric Analysis by Covariates 
+### Hypotheses and log-rank tests  
+After charting the kaplan-meier curves, we would like to know if the estimated survivor functions are statistically equivalent.  
+first thing first, we set up hypothesis, null(H0) and alternate hypothesis (H1) where H0 is our claim as the researcher and it says " _there is no statistical difference in survival functions (curve) between the levels of covariate_"while the H1 is trying to debunk our claim saying "_there is difference in at least one pair of survival functions_"  
+The log-rank test is a large-sample-chi-square test that provides an overall comparison of of the KM curves being compared   
+log-rank statistics = $\frac{(O_{2}-E_{2})2}{var(O_{2}-E_{2})}$  
+
+### kmsurvgender<- kaplan-meier estimated curve for gender  
+```{r, echo=FALSE}
+kmsurvgender<- survfit(Surv(time, status) ~ gender, data = project_data )
+summary(kmsurvgender)
+surv_median(kmsurvgender)##compare median times of levels
+ggsurvplot(kmsurvgender, fun = "pct", linetype = c(1,5), 
+           surv.median.line ="hv",
+           risk.table = "absolute",
+           legend.title = "gender", legend.labs = c("male", "female"),
+           title ='Estimated Survivor Curve for Gender', xlim = c(0,30),
+           font.title = c(16, "bold", "blue"))
+```
+
+### __hypothesis testing__  
+H0: there is no difference in survival functions (curve) between the two levels of gender  
+H0: s(t_male) = s(t_female)   
+H1: there is difference in at least one pair of survival function  
+H1: s(t_male) != s(t_female)   
+
+### log rank test  
+```{r, echo = FALSE}
+survdiff(Surv(time, status) ~gender,rho= 0)
+```
+### Interpretation of the test
+with the log-rank value of 0.6 and a p-value=_0.4_, thus the p-value indicates that the null hypothesis could not be rejected as it follows the criteria for rejection which says __if p-value < 0.05, reject null hypothesis and if otherwise, do not reject H0__  
+there was not enough evidence to reject the null hypothesis, therefore the survivor function of male is equal to that of female   
+### kmsurv2<- km estimated curve for livinginsch  
+```{r,echo=FALSE}
+kmsurv2<- survfit(Surv(time, status) ~ livingINsch, data = project_data )
+summary(kmsurv2)
+ggsurvplot(kmsurv2, fun = "pct", linetype = c(1,5), 
+           surv.median.line ="hv",
+           risk.table = "absolute",
+           legend.title = "livinginsch", legend.labs = c("day", "boarder"),
+           title ='Estimated Survivor Curve for Living in School Type', xlim = c(0,30))
+surv_median(kmsurv2)##compare median times of levels
+```
+
+### Hypothesis
+H0: s(t_day) = s(t_boarder)  
+H1: s(t_day) != s(t_boarder)  
+### log_rank test for living in schol  
+```{r, echo = FALSE}
+survdiff(Surv(time, status) ~ livingINsch,rho= 0)
+
+```
+
+### Interpretation of the test
+with the log-rank value of 5.6 and a p-value=0.02, thus the p-value indicates that the null hypothesis should be rejected based on the criteria: __if p-value < 0.05, reject null hypothesis and if otherwise, do not reject H0__  
+there was not enough evidence to reject the null hypothesis.we can therefore conclude that the day and boarder have significantly different KM survival curves    
+### kmsurvtos<- km estimated curve for type of ownership of secondary school attended   
+```{r echo=FALSE}
+kmsurvtos<- survfit(Surv(time, status) ~ TOSecSch, data = project_data )
+summary(kmsurvtos)
+surv_median(kmsurvtos)##compare median times of levels
+ggsurvplot(kmsurvtos, fun = "pct", linetype = c(1,5,9), 
+           surv.median.line ="hv",
+           risk.table = "absolute",
+           legend.title = "Type of Ownership of Secondary School",
+           legend.labs = c("federal govt. owned", "state govt. owned", "private"),
+           title ='Estimated Survivor Curve for type of ownership of school', xlim = c(0,30))
+```
+
+### Hypothesis to test the survivor function of type of ownership of secondary school   
+H0: s(t_fed) = s(t_state) = s(t_private)
+H1: s(t_fed) != s(t_state) != s(t_private)
+#log_rank test for ownership of secondary school
+```{r, echo=FALSE}
+survdiff(Surv(time, status) ~TOSecSch,rho= 0)
+```
+### Interpretation of the test  
+Since the p-value of the log-rank statistics (0.02) is less than the 0.05 level of significance, we reject H~0~ at 5%level of significance.  
+Hence, we concludethat at least one of the groups have a different KM survival curve 
+
+### kmsurv_zone<- km estimated curve for zone  
+```{r, echo=FALSE}
+
+kmsurvzone<- survfit(Surv(time, status) ~ zone, data = project_data )
+summary(kmsurvzone)
+surv_median(kmsurvzone)##compare median times of levels
+ggsurvplot(kmsurvzone, fun = "pct", linetype = c(1,5,6,7,8,3), 
+           surv.median.line ="hv",
+           legend.title = "zone", legend.labs = c("ne","nc","nw","ss","se","sw"),
+           title ='Estimated Survivor Curve for Geo-political zone', xlim = c(0,30))
+```
+### Hypothesis
+H0: s(t_NC) = s(t_NE) = s(t_NW) = s(t_SS) = s(t_SW) = s(t_SS)  
+H1: s(t_NC) != s(t_NE) != s(t_NW) != s(t_SS) != s(t_SW) != s(t_SS)  
+
+### log_rank test for zone  
+```{r,echo=FALSE}
+survdiff(Surv(time, status) ~zone,rho= 0)
+```
+### interpretaton  
+log rank test value of 4.7 and a p value of 0.4 says we reject H~0~ as the p-value is less than the alpha value.  
+conclusion: we then conclude that there is at least a pair of zones whose KM curves that are different from each other  
+
+### kmsurvopinion<- km estimated curve for opinion  
+```{r,echo=FALSE}
+kmsurvopinion<- survfit(Surv(time, status) ~ opinion, data = project_data )
+summary(kmsurvopinion) 
+ggsurvplot(kmsurvopinion, fun = "pct", linetype = c(1,5,4,6,8), 
+           surv.median.line ="hv",
+           risk.table = "absolute",
+           legend.title = "opinion",
+           legend.labs = c("strong +ve attitude to edu and sch", 
+                           "+ve attitude to edu and sch",
+                           "neutral",
+                           "-ve attitude to edu and sch",
+                           "strong -ve attitude to edu and sch"),
+           title ='Estimated Survivor Curve for opinion', xlim = c(0,30),
+           font.title = c(16, "bold", "blue"))
+```
+**compare median times of levels**    
+```{r, echo=FALSE}
+surv_median(kmsurvopinion)
+```
+### Hypothesis for opinion   
+H0: s(t_s+) = s(t_+) = s(t_neutral) = s(t_-) = s(t_s-)  
+H1: s(t_s+) != s(t_+) != s(t_neutral) != s(t_-) != s(t_s-)  
+# log_rank test for opinion  
+```{r,echo = FALSE}
+survdiff(Surv(time, status) ~opinion,rho= 0)
+
+```
+### Interpretation of the test  
+the p-value of the log-rank test at 5% level of significance is 0.6 which is greater than the alpha. Hence, H~0~ is not   rejected and we conclude that the groups of opinion do not have different KM survivor curves   
+ 
+### kmsurvexam<- km estimated curve for no of times respondents tried 0level examination   
+```{r,echo=FALSE}
+kmsurvexam<- survfit(Surv(time, status) ~ olevel, data = project_data )
+summary(kmsurvexam) 
+ggsurvplot(kmsurvexam, fun = "pct", linetype = c(1,5), 
+           surv.median.line ="hv",
+           risk.table = "absolute",
+           legend.title = "gender", legend.labs = c("once", "more than once"),
+           title ='Estimated Survivor Curve for opinion', xlim = c(0,30),
+           font.title = c(16, "bold", "blue"))
+```
+
+### compare median times of levels  
+```{r,echo=FALSE}
+surv_median(kmsurvexam)
+```
+### hypothesis  
+H0: s(t_once) = s(t_more)  
+H1: s(t_once) = s(t_more)   
+
+### log_rank test for olevel  
+```{r, echo=FALSE}
+survdiff(Surv(time, status) ~olevel,rho= 0)
+
+```
+# Interpretation and Conclusion
+with the log-rank value of 3.5 and a p-value=0.06 which is greater than the 5% level of significance, thus the p-value indicates that H~0~ should not be rejected based on the criteria: __if p-value < 0.05, reject null hypothesis and if otherwise, do not reject H0__    
+**Conclusion** there was not enough evidence to reject the null hypothesis. We can therefore conclude that the two survival groups do not have statistically different KM survival curves  
+
+### Nelson-Aalen Cummulative Hazard 
+below is the Nelson-Aalen cummulative hazard estimate  
+```{r,echo=FALSE}
+ggsurvplot(kmsurv, fun = "cumhaz")
+
+```
+
+dummy variable encoding
+```{r, echo=FALSE}
+##dummy encoding
+
+##dummy for zone where nc is the reference variable
+sw<-ifelse(zone=='6',1,0)
+ss<-ifelse(zone=='5',1,0)
+se<-ifelse(zone=='4',1,0)
+nw<-ifelse(zone=='3',1,0)
+ne<-ifelse(zone=='2',1,0)
+
+##dummy for gender where male is the reference variable
+female<-ifelse(gender=='2',1,0)
+
+##dummy for type of secondary school where fed is the reference variable
+state<-ifelse(TOSecSch=='2',1,0)
+private<-ifelse(TOSecSch=='3',1,0)
+
+##dummy for livinginsch where boarder is the reference variable
+day<-ifelse(livingINsch=='1',1,0)
+
+##dummy for opinion where strong negative is the reference variable
+strong_positive<-ifelse(opinion=='1',1,0)
+positive<-ifelse(opinion=='2',1,0)
+neutral<-ifelse(opinion=='3',1,0)
+negative<-ifelse(opinion=='4',1,0)
+
+##dummy for olevel exam where more is the reference variable
+once<-ifelse(olevel=='0',1,0)
+
+dummy_covariates<- cbind(sw,ss,se,nw,ne,
+                    female,
+                    state,private,
+                    day,
+                    strong_positive,positive,neutral,negative,
+                    once)
+
+head(dummy_covariates)
+```
+
+```{r,echo = FALSE}
+cfit1<- coxph(Surv(time, status)~ gender + TOSecSch +livingINsch + zone                                           + opinion +olevel,data= project_data)
+cfit1
+```
+```{r, echo = FALSE}
+cfit<- coxph(Surv(time, status)~ sw+ss+se+nw+ne+female+state+private+day+ strong_positive +positive + neutral +negative +once,
+             data = project_data, method = "breslow")
+
+cfit
+```
+
+
+
